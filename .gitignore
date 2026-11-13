@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 遊戲快取與備份
+translation_cache.json
+data_backup*/
+test_data/
+*.bak
+
+# IDE & OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
