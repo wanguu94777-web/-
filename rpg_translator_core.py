@@ -748,16 +748,21 @@ class RPGProjectManager:
                     self.engine.cache[text] = res
                     success_count += 1
                     time.sleep(0.08)  # 防限速微小延遲
+                    # 取得翻譯後的中文文本，去除換行
+                    disp_text = res.replace('\n', ' ').strip()
                 except Exception as e:
                     failed_count += 1
                     err_msg = f"翻譯失敗: {text[:20]}... 錯誤: {e}"
                     print(err_msg)
                     if error_cb:
                         error_cb(err_msg)
+                    disp_text = f"[失敗: {text[:15]}...]"
 
                 translated_count += 1
                 if progress_cb:
-                    progress_cb(translated_count, total_needed, f"翻譯進度 ({translated_count}/{total_needed}) [成功:{success_count} 失敗:{failed_count}]: {text[:15]}...")
+                    if len(disp_text) > 35:
+                        disp_text = disp_text[:35] + "..."
+                    progress_cb(translated_count, total_needed, f"翻譯進度 ({translated_count}/{total_needed}) [成功:{success_count} 失敗:{failed_count}]: {disp_text}")
 
                 # 每 30 句儲存一次快取
                 if translated_count % 30 == 0:
