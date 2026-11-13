@@ -80,12 +80,14 @@ class RPGTranslatorApp:
         engine_frame.pack(fill=tk.X, pady=4)
         ttk.Label(engine_frame, text="翻譯引擎:", width=16, anchor=tk.W).pack(side=tk.LEFT)
         self.engine_var = tk.StringVar(value="google")
-        r0 = ttk.Radiobutton(engine_frame, text="Google 翻譯 (免費、免 Key - 推薦首選)", variable=self.engine_var, value="google", command=self._on_engine_change)
-        r0.pack(side=tk.LEFT, padx=(4, 12))
-        r1 = ttk.Radiobutton(engine_frame, text="Claude (Anthropic API - 需 Key)", variable=self.engine_var, value="claude", command=self._on_engine_change)
-        r1.pack(side=tk.LEFT, padx=(0, 12))
-        r2 = ttk.Radiobutton(engine_frame, text="OpenAI / 其他相容", variable=self.engine_var, value="openai", command=self._on_engine_change)
-        r2.pack(side=tk.LEFT)
+        r0 = ttk.Radiobutton(engine_frame, text="Google 翻譯 (免安裝、免 Key)", variable=self.engine_var, value="google", command=self._on_engine_change)
+        r0.pack(side=tk.LEFT, padx=(4, 10))
+        r1 = ttk.Radiobutton(engine_frame, text="Ollama (本機免費 AI - 免 Key、極通順)", variable=self.engine_var, value="ollama", command=self._on_engine_change)
+        r1.pack(side=tk.LEFT, padx=(0, 10))
+        r2 = ttk.Radiobutton(engine_frame, text="Claude (頂級品質 - 需 Key)", variable=self.engine_var, value="claude", command=self._on_engine_change)
+        r2.pack(side=tk.LEFT, padx=(0, 10))
+        r3 = ttk.Radiobutton(engine_frame, text="OpenAI / Gemini / DeepSeek", variable=self.engine_var, value="openai", command=self._on_engine_change)
+        r3.pack(side=tk.LEFT)
 
         # 4. LLM / Claude 進階設定 (可摺疊/動態顯示)
         self.llm_frame = ttk.Frame(config_frame)
@@ -186,7 +188,23 @@ class RPGTranslatorApp:
 
     def _on_engine_change(self):
         engine = self.engine_var.get()
-        if engine == "claude":
+        if engine == "ollama":
+            self.llm_frame.pack(fill=tk.X, pady=(6, 2))
+            self.api_key_label.config(text="API Key (Ollama免填):")
+            self.api_key_var.set("ollama")
+            self.base_url_var.set("http://localhost:11434/v1")
+            self.model_combo.config(values=[
+                "qwen2.5:7b",
+                "qwen2.5:14b",
+                "qwen2.5:3b",
+                "gemma2:9b",
+                "deepseek-r1:8b",
+                "llama3.1:8b"
+            ])
+            self.model_var.set("qwen2.5:7b")
+            self._log("[提示] 已切換至 Ollama 本機 AI 模式 (免 Key、免費)。")
+            self._log("請確保電腦已安裝 Ollama 並已執行: ollama run qwen2.5:7b")
+        elif engine == "claude":
             self.llm_frame.pack(fill=tk.X, pady=(6, 2))
             self.api_key_label.config(text="Claude API Key:")
             self.base_url_var.set("https://api.anthropic.com/v1")
@@ -266,11 +284,14 @@ class RPGTranslatorApp:
         api_key = self.api_key_var.get().strip()
 
         # 檢查 API Key 避免 401 錯誤
-        if engine in ["claude", "openai"] and not api_key:
+        if engine == "ollama":
+            if not api_key:
+                api_key = "ollama"
+        elif engine in ["claude", "openai"] and not api_key:
             messagebox.showwarning(
                 "缺少 API Key",
                 f"您選擇了 {engine.upper()} 翻譯引擎，但尚未填寫 API Key！\n\n"
-                "• 若您沒有 API Key，請將上方翻譯引擎切換為「Google 翻譯 (免費、免 Key)」！\n"
+                "• 若您想免費使用，可切換為「Google 翻譯」或「Ollama (本機免費 AI)」！\n"
                 "• 若您有 API Key，請在設定欄位填入後再點擊開始。"
             )
             return

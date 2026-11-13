@@ -525,18 +525,22 @@ class TranslationEngine:
             "temperature": 0.3
         }
 
+        headers = {'Content-Type': 'application/json'}
+        if api_key:
+            headers['Authorization'] = f'Bearer {api_key}'
+        elif 'localhost' in endpoint or '127.0.0.1' in endpoint:
+            headers['Authorization'] = 'Bearer ollama'
+
         req = urllib.request.Request(
             endpoint,
             data=json.dumps(payload).encode('utf-8'),
-            headers={
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {api_key}'
-            }
+            headers=headers
         )
 
         for attempt in range(3):
             try:
-                with urllib.request.urlopen(req, timeout=20) as resp:
+                # 延長 timeout 至 60 秒以適應本地模型生成速度
+                with urllib.request.urlopen(req, timeout=60) as resp:
                     res_data = json.loads(resp.read().decode('utf-8'))
                     translated = res_data['choices'][0]['message']['content'].strip()
                     # 去除多餘首尾包裹引號
@@ -734,11 +738,13 @@ class RPGProjectManager:
                             src="日文" if src_lang == 'ja' else src_lang,
                             tgt="繁體中文" if tgt_lang == 'zh-TW' else tgt_lang
                         )
-                    elif engine_type == 'openai':
+                    elif engine_type in ['openai', 'ollama']:
+                        target_base_url = base_url if base_url else ("http://localhost:11434/v1" if engine_type == 'ollama' else "https://api.openai.com/v1")
+                        target_model = model if model else ("qwen2.5:7b" if engine_type == 'ollama' else "gpt-4o-mini")
                         res = self.engine.translate_openai(
                             text, api_key=api_key,
-                            base_url=base_url if base_url else "https://api.openai.com/v1",
-                            model=model if model else "gpt-4o-mini",
+                            base_url=target_base_url,
+                            model=target_model,
                             src="日文" if src_lang == 'ja' else src_lang,
                             tgt="繁體中文" if tgt_lang == 'zh-TW' else tgt_lang
                         )
@@ -752,7 +758,11 @@ class RPGProjectManager:
                     disp_text = res.replace('\n', ' ').strip()
                 except Exception as e:
                     failed_count += 1
-                    err_msg = f"翻譯失敗: {text[:20]}... 錯誤: {e}"
+                    err_str = str(e)
+                    if "10061" in err_str or "Connection refused" in err_str:
+                        err_msg = "連線至本地 Ollama 失敗 (請確認已在 CMD 執行: ollama run qwen2.5:7b)"
+                    else:
+                        err_msg = f"翻譯失敗: {text[:20]}... 錯誤: {e}"
                     print(err_msg)
                     if error_cb:
                         error_cb(err_msg)
