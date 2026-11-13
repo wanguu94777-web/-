@@ -11,6 +11,7 @@ import time
 import shutil
 import urllib.request
 import urllib.parse
+import urllib.error
 from typing import List, Dict, Tuple, Optional, Callable, Any
 
 # ==========================================
@@ -554,6 +555,72 @@ class TranslationEngine:
                     raise e
         return text
 
+    def translate_gemini(self, text: str, api_key: str, model: str = "gemini-2.5-flash", src: str = "日文", tgt: str = "繁體中文") -> str:
+        """
+        使用 Google 官方 Gemini REST API 進行快速高品質遊戲文本翻譯 (支援免費 API Key)
+        """
+        if not text.strip():
+            return text
+
+        masked_text, tags = ControlCodeMasker.mask(text)
+        target_model = model if model else "gemini-2.5-flash"
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={api_key.strip()}"
+
+        prompt = (
+            f"你是一位頂尖的 RPG Maker 遊戲在地化專家。請將以下文本從{src}翻譯成{tgt}。\n"
+            f"規則：\n"
+            f"1. 絕對保留所有類似 ___TAG_0___ 的格式標籤原樣不變，不得更動或刪減空格。\n"
+            f"2. 翻譯語氣自然流暢、符合遊戲角色性格與冒險世界觀。\n"
+            f"3. 直接輸出翻譯後的文本，絕對不要輸出任何多餘的解釋、說明、問候、引號或前綴後綴。\n\n"
+            f"待翻譯文本：\n{masked_text}"
+        )
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [{"text": prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.3
+            }
+        }
+
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode('utf-8'),
+            headers={'Content-Type': 'application/json'}
+        )
+
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    res_data = json.loads(resp.read().decode('utf-8'))
+                    candidates = res_data.get('candidates', [])
+                    if not candidates:
+                        raise ValueError("Gemini 未回傳有效內容")
+                    parts = candidates[0].get('content', {}).get('parts', [])
+                    translated = "".join(p.get('text', '') for p in parts).strip()
+                    if (translated.startswith('"') and translated.endswith('"')) or (translated.startswith('「') and translated.endswith('」') and not text.startswith('「')):
+                        translated = translated[1:-1]
+                    restored = ControlCodeMasker.unmask(translated, tags)
+                    return restored
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode('utf-8', errors='ignore')
+                if e.code == 429:
+                    time.sleep(3 + attempt * 3)
+                elif e.code in [400, 403]:
+                    raise Exception(f"Gemini API Key 無效或權限不足 (HTTP {e.code}): {err_body}")
+                else:
+                    time.sleep(1 + attempt * 2)
+                if attempt == 2:
+                    raise Exception(f"Gemini API 請求失敗 ({e.code}): {err_body}")
+            except Exception as e:
+                time.sleep(1 + attempt * 2)
+                if attempt == 2:
+                    raise e
+        return text
+
 
 # ==========================================
 # 專案管理器 (備份、翻譯批次、匯出/匯入)
@@ -730,7 +797,19 @@ class RPGProjectManager:
                     break
 
                 try:
-                    if engine_type == 'claude':
+                    # 智慧自動檢測：若 Key 以 AIzaSy 開頭，自動導向 Google Gemini
+                    effective_engine = engine_type
+                    if api_key and api_key.strip().startswith('AIzaSy'):
+                        effective_engine = 'gemini'
+
+                    if effective_engine == 'gemini':
+                        res = self.engine.translate_gemini(
+                            text, api_key=api_key,
+                            model=model if model and "gemini" in model.lower() else "gemini-2.5-flash",
+                            src="日文" if src_lang == 'ja' else src_lang,
+                            tgt="繁體中文" if tgt_lang == 'zh-TW' else tgt_lang
+                        )
+                    elif effective_engine == 'claude':
                         res = self.engine.translate_claude(
                             text, api_key=api_key,
                             base_url=base_url if base_url else "https://api.anthropic.com/v1",
@@ -738,9 +817,9 @@ class RPGProjectManager:
                             src="日文" if src_lang == 'ja' else src_lang,
                             tgt="繁體中文" if tgt_lang == 'zh-TW' else tgt_lang
                         )
-                    elif engine_type in ['openai', 'ollama']:
-                        target_base_url = base_url if base_url else ("http://localhost:11434/v1" if engine_type == 'ollama' else "https://api.openai.com/v1")
-                        target_model = model if model else ("qwen2.5:7b" if engine_type == 'ollama' else "gpt-4o-mini")
+                    elif effective_engine in ['openai', 'ollama']:
+                        target_base_url = base_url if base_url else ("http://localhost:11434/v1" if effective_engine == 'ollama' else "https://api.openai.com/v1")
+                        target_model = model if model else ("qwen2.5:7b" if effective_engine == 'ollama' else "gpt-4o-mini")
                         res = self.engine.translate_openai(
                             text, api_key=api_key,
                             base_url=target_base_url,

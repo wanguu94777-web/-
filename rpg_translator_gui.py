@@ -81,46 +81,49 @@ class RPGTranslatorApp:
         ttk.Label(engine_frame, text="翻譯引擎:", width=16, anchor=tk.W).pack(side=tk.LEFT)
         self.engine_var = tk.StringVar(value="google")
         r0 = ttk.Radiobutton(engine_frame, text="Google 翻譯 (免安裝、免 Key)", variable=self.engine_var, value="google", command=self._on_engine_change)
-        r0.pack(side=tk.LEFT, padx=(4, 10))
-        r1 = ttk.Radiobutton(engine_frame, text="Ollama (本機免費 AI - 免 Key、極通順)", variable=self.engine_var, value="ollama", command=self._on_engine_change)
-        r1.pack(side=tk.LEFT, padx=(0, 10))
-        r2 = ttk.Radiobutton(engine_frame, text="Claude (頂級品質 - 需 Key)", variable=self.engine_var, value="claude", command=self._on_engine_change)
-        r2.pack(side=tk.LEFT, padx=(0, 10))
-        r3 = ttk.Radiobutton(engine_frame, text="OpenAI / Gemini / DeepSeek", variable=self.engine_var, value="openai", command=self._on_engine_change)
-        r3.pack(side=tk.LEFT)
+        r0.pack(side=tk.LEFT, padx=(4, 8))
+        r1 = ttk.Radiobutton(engine_frame, text="Google Gemini (免費 AI - 速度極快、極通順)", variable=self.engine_var, value="gemini", command=self._on_engine_change)
+        r1.pack(side=tk.LEFT, padx=(0, 8))
+        r2 = ttk.Radiobutton(engine_frame, text="Ollama (本機免費 AI - 免 Key)", variable=self.engine_var, value="ollama", command=self._on_engine_change)
+        r2.pack(side=tk.LEFT, padx=(0, 8))
+        r3 = ttk.Radiobutton(engine_frame, text="Claude (需 Key)", variable=self.engine_var, value="claude", command=self._on_engine_change)
+        r3.pack(side=tk.LEFT, padx=(0, 8))
+        r4 = ttk.Radiobutton(engine_frame, text="OpenAI / 其他相容", variable=self.engine_var, value="openai", command=self._on_engine_change)
+        r4.pack(side=tk.LEFT)
 
-        # 4. LLM / Claude 進階設定 (可摺疊/動態顯示)
+        # 4. LLM / Claude / Gemini 進階設定 (可摺疊/動態顯示)
         self.llm_frame = ttk.Frame(config_frame)
         
-        llm_row1 = ttk.Frame(self.llm_frame)
-        llm_row1.pack(fill=tk.X, pady=2)
-        self.api_key_label = ttk.Label(llm_row1, text="Claude API Key:", width=16, anchor=tk.W)
+        self.api_key_row = ttk.Frame(self.llm_frame)
+        self.api_key_row.pack(fill=tk.X, pady=2)
+        self.api_key_label = ttk.Label(self.api_key_row, text="API Key:", width=16, anchor=tk.W)
         self.api_key_label.pack(side=tk.LEFT)
         self.api_key_var = tk.StringVar()
-        ttk.Entry(llm_row1, textvariable=self.api_key_var, show="*").pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0))
+        ttk.Entry(self.api_key_row, textvariable=self.api_key_var, show="*").pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0))
 
-        llm_row2 = ttk.Frame(self.llm_frame)
-        llm_row2.pack(fill=tk.X, pady=2)
-        ttk.Label(llm_row2, text="Base URL:", width=16, anchor=tk.W).pack(side=tk.LEFT)
+        self.base_url_row = ttk.Frame(self.llm_frame)
+        self.base_url_row.pack(fill=tk.X, pady=2)
+        ttk.Label(self.base_url_row, text="Base URL:", width=16, anchor=tk.W).pack(side=tk.LEFT)
         self.base_url_var = tk.StringVar(value="https://api.anthropic.com/v1")
-        ttk.Entry(llm_row2, textvariable=self.base_url_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 20))
+        ttk.Entry(self.base_url_row, textvariable=self.base_url_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 0))
 
-        ttk.Label(llm_row2, text="Model:").pack(side=tk.LEFT)
-        self.model_var = tk.StringVar(value="claude-3-7-sonnet-20250219")
+        self.model_row = ttk.Frame(self.llm_frame)
+        self.model_row.pack(fill=tk.X, pady=2)
+        ttk.Label(self.model_row, text="Model:", width=16, anchor=tk.W).pack(side=tk.LEFT)
+        self.model_var = tk.StringVar(value="gemini-2.5-flash")
         self.model_combo = ttk.Combobox(
-            llm_row2,
+            self.model_row,
             textvariable=self.model_var,
             values=[
-                "claude-3-7-sonnet-20250219",
-                "claude-3-5-sonnet-latest",
-                "claude-3-5-haiku-latest",
-                "claude-3-5-sonnet-20241022",
-                "claude-3-5-haiku-20241022"
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-1.5-flash"
             ],
             width=28
         )
         self.model_combo.pack(side=tk.LEFT, padx=(4, 6))
-        ttk.Label(llm_row2, text="(可下拉或直接輸入自訂模型)", font=("Microsoft JhengHei UI", 8), foreground="#666666").pack(side=tk.LEFT)
+        self.model_hint_label = ttk.Label(self.model_row, text="(可下拉或直接輸入自訂模型)", font=("Microsoft JhengHei UI", 8), foreground="#666666")
+        self.model_hint_label.pack(side=tk.LEFT)
 
         # 功能按鈕卡片
         btn_frame = ttk.Frame(self.root, padding=12)
@@ -188,10 +191,22 @@ class RPGTranslatorApp:
 
     def _on_engine_change(self):
         engine = self.engine_var.get()
-        if engine == "ollama":
+        if engine == "gemini":
+            self.llm_frame.pack(fill=tk.X, pady=(6, 2))
+            self.api_key_label.config(text="Gemini API Key:")
+            self.base_url_row.pack_forget()  # Gemini 原生呼叫，無需手動填寫 Base URL！
+            self.model_combo.config(values=[
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-1.5-flash"
+            ])
+            self.model_var.set("gemini-2.5-flash")
+            self._log("[提示] 已切換至 Google Gemini 免費 AI 模式。請至 aistudio.google.com 取得免費金鑰並貼上。")
+        elif engine == "ollama":
             self.llm_frame.pack(fill=tk.X, pady=(6, 2))
             self.api_key_label.config(text="API Key (Ollama免填):")
             self.api_key_var.set("ollama")
+            self.base_url_row.pack(fill=tk.X, pady=2)
             self.base_url_var.set("http://localhost:11434/v1")
             self.model_combo.config(values=[
                 "qwen2.5:7b",
@@ -202,11 +217,11 @@ class RPGTranslatorApp:
                 "llama3.1:8b"
             ])
             self.model_var.set("qwen2.5:7b")
-            self._log("[提示] 已切換至 Ollama 本機 AI 模式 (免 Key、免費)。")
-            self._log("請確保電腦已安裝 Ollama 並已執行: ollama run qwen2.5:7b")
+            self._log("[提示] 已切換至 Ollama 本機 AI 模式 (免 Key、免費)。請確保已執行: ollama run qwen2.5:7b")
         elif engine == "claude":
             self.llm_frame.pack(fill=tk.X, pady=(6, 2))
             self.api_key_label.config(text="Claude API Key:")
+            self.base_url_row.pack(fill=tk.X, pady=2)
             self.base_url_var.set("https://api.anthropic.com/v1")
             self.model_combo.config(values=[
                 "claude-3-7-sonnet-20250219",
@@ -219,6 +234,7 @@ class RPGTranslatorApp:
         elif engine == "openai":
             self.llm_frame.pack(fill=tk.X, pady=(6, 2))
             self.api_key_label.config(text="API Key:")
+            self.base_url_row.pack(fill=tk.X, pady=2)
             self.base_url_var.set("https://api.openai.com/v1")
             self.model_combo.config(values=[
                 "gpt-4o-mini",
@@ -283,16 +299,16 @@ class RPGTranslatorApp:
         engine = self.engine_var.get()
         api_key = self.api_key_var.get().strip()
 
-        # 檢查 API Key 避免 401 錯誤
+        # 檢查 API Key 避免錯誤
         if engine == "ollama":
             if not api_key:
                 api_key = "ollama"
-        elif engine in ["claude", "openai"] and not api_key:
+        elif engine in ["gemini", "claude", "openai"] and not api_key:
             messagebox.showwarning(
                 "缺少 API Key",
                 f"您選擇了 {engine.upper()} 翻譯引擎，但尚未填寫 API Key！\n\n"
-                "• 若您想免費使用，可切換為「Google 翻譯」或「Ollama (本機免費 AI)」！\n"
-                "• 若您有 API Key，請在設定欄位填入後再點擊開始。"
+                "• 若您想完全免 Key 使用，可切換為「Google 翻譯」或「Ollama (本機免費 AI)」！\n"
+                "• 若您有 Gemini 金鑰，請在上方欄位貼上後再點擊開始。"
             )
             return
 
