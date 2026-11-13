@@ -79,10 +79,10 @@ class RPGTranslatorApp:
         engine_frame = ttk.Frame(config_frame)
         engine_frame.pack(fill=tk.X, pady=4)
         ttk.Label(engine_frame, text="翻譯引擎:", width=16, anchor=tk.W).pack(side=tk.LEFT)
-        self.engine_var = tk.StringVar(value="claude")
-        r0 = ttk.Radiobutton(engine_frame, text="Claude (Anthropic API - 推薦高品質)", variable=self.engine_var, value="claude", command=self._on_engine_change)
+        self.engine_var = tk.StringVar(value="google")
+        r0 = ttk.Radiobutton(engine_frame, text="Google 翻譯 (免費、免 Key - 推薦首選)", variable=self.engine_var, value="google", command=self._on_engine_change)
         r0.pack(side=tk.LEFT, padx=(4, 12))
-        r1 = ttk.Radiobutton(engine_frame, text="Google 翻譯 (免費、免 Key)", variable=self.engine_var, value="google", command=self._on_engine_change)
+        r1 = ttk.Radiobutton(engine_frame, text="Claude (Anthropic API - 需 Key)", variable=self.engine_var, value="claude", command=self._on_engine_change)
         r1.pack(side=tk.LEFT, padx=(0, 12))
         r2 = ttk.Radiobutton(engine_frame, text="OpenAI / 其他相容", variable=self.engine_var, value="openai", command=self._on_engine_change)
         r2.pack(side=tk.LEFT)
@@ -113,9 +113,6 @@ class RPGTranslatorApp:
         )
         self.model_combo.pack(side=tk.LEFT, padx=(4, 0))
 
-        # 預設展開 Claude 設定
-        self.llm_frame.pack(fill=tk.X, pady=(6, 2))
-
         # 功能按鈕卡片
         btn_frame = ttk.Frame(self.root, padding=12)
         btn_frame.pack(fill=tk.X)
@@ -142,6 +139,9 @@ class RPGTranslatorApp:
 
         self.restore_btn = ttk.Button(btn_frame, text="🔄 還原備份", command=self._restore_backup)
         self.restore_btn.pack(side=tk.LEFT, padx=4)
+
+        self.clear_cache_btn = ttk.Button(btn_frame, text="🧹 清除快取", command=self._clear_cache)
+        self.clear_cache_btn.pack(side=tk.LEFT, padx=4)
 
         self.stop_btn = ttk.Button(btn_frame, text="⏹ 停止", state=tk.DISABLED, command=self._request_stop)
         self.stop_btn.pack(side=tk.RIGHT)
@@ -231,6 +231,7 @@ class RPGTranslatorApp:
         self.export_btn.config(state=state)
         self.import_btn.config(state=state)
         self.restore_btn.config(state=state)
+        self.clear_cache_btn.config(state=state)
         self.stop_btn.config(state=tk.NORMAL if running else tk.DISABLED)
 
     def _request_stop(self):
@@ -240,6 +241,19 @@ class RPGTranslatorApp:
 
     def _start_auto_translate(self):
         if not self._init_project():
+            return
+
+        engine = self.engine_var.get()
+        api_key = self.api_key_var.get().strip()
+
+        # 檢查 API Key 避免 401 錯誤
+        if engine in ["claude", "openai"] and not api_key:
+            messagebox.showwarning(
+                "缺少 API Key",
+                f"您選擇了 {engine.upper()} 翻譯引擎，但尚未填寫 API Key！\n\n"
+                "• 若您沒有 API Key，請將上方翻譯引擎切換為「Google 翻譯 (免費、免 Key)」！\n"
+                "• 若您有 API Key，請在設定欄位填入後再點擊開始。"
+            )
             return
 
         # 確認對話框
@@ -252,8 +266,6 @@ class RPGTranslatorApp:
         # 取得參數
         src = self.src_lang_var.get().split()[0]
         tgt = self.tgt_lang_var.get().split()[0]
-        engine = self.engine_var.get()
-        api_key = self.api_key_var.get().strip()
         base_url = self.base_url_var.get().strip()
         model = self.model_var.get().strip()
 
@@ -375,6 +387,18 @@ class RPGTranslatorApp:
             messagebox.showinfo("還原成功", "遊戲資料已成功還原！")
         except Exception as e:
             messagebox.showerror("還原失敗", str(e))
+
+    def _clear_cache(self):
+        if not self._init_project():
+            return
+        if not messagebox.askyesno("確認清除快取", "確定要清除先前儲存的翻譯快取嗎？\n\n這會清除先前 401 錯誤或中斷留下的快取紀錄，以便重新進行完整翻譯。"):
+            return
+        try:
+            self.project_mgr.clear_cache()
+            self._log("[快取已清除] 已清空 translation_cache.json。")
+            messagebox.showinfo("完成", "已成功清除翻譯快取！現在可以重新點擊「一鍵自動翻譯遊戲」。")
+        except Exception as e:
+            messagebox.showerror("清除失敗", str(e))
 
 def main():
     root = tk.Tk()

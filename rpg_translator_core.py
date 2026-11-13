@@ -583,6 +583,16 @@ class RPGProjectManager:
             if os.path.isfile(s) and item.lower().endswith('.json'):
                 shutil.copy2(s, d)
 
+    def clear_cache(self):
+        """清除快取資料"""
+        cache_path = os.path.join(self.data_dir, "translation_cache.json")
+        if os.path.exists(cache_path):
+            try:
+                os.remove(cache_path)
+            except Exception:
+                pass
+        self.engine.cache = {}
+
     def get_json_files(self) -> List[str]:
         """取得 data 目錄下所有 RPG Maker 支援的 json 檔案"""
         target_files = []
@@ -696,7 +706,9 @@ class RPGProjectManager:
         needed_trans = set()
         for fname, items in extracted.items():
             for loc, text in items:
-                if text not in self.engine.cache:
+                cached_val = self.engine.cache.get(text)
+                # 若尚未在快取中，或快取值與原文完全相同（通常是先前發生 401 錯誤或中斷留下的殘留），重新加入待翻譯
+                if not cached_val or cached_val == text:
                     needed_trans.add(text)
 
         total_needed = len(needed_trans)
@@ -732,8 +744,7 @@ class RPGProjectManager:
                     time.sleep(0.08)  # 防限速微小延遲
                 except Exception as e:
                     print(f"翻譯失敗: {text[:20]}... 錯誤: {e}")
-                    # 若翻譯失敗，先保留原文字，避免崩潰
-                    self.engine.cache[text] = text
+                    # 翻譯失敗時不寫入快取，讓下次重試時能重新翻譯
 
                 translated_count += 1
                 if progress_cb:
