@@ -454,7 +454,7 @@ class TranslationEngine:
                     raise e
         return text
 
-    def translate_claude(self, text: str, api_key: str, base_url: str = "https://api.anthropic.com/v1", model: str = "claude-3-5-haiku-20241022", src: str = "日文", tgt: str = "繁體中文") -> str:
+    def translate_claude(self, text: str, api_key: str, base_url: str = "https://api.anthropic.com/v1", model: str = "claude-3-7-sonnet-20250219", src: str = "日文", tgt: str = "繁體中文") -> str:
         """
         使用 Anthropic Claude 進行高水準 RPG 遊戲文本在地化翻譯
         """
@@ -690,10 +690,11 @@ class RPGProjectManager:
         tgt_lang: str = 'zh-TW',
         api_key: str = '',
         base_url: str = 'https://api.openai.com/v1',
-        model: str = 'gpt-4o-mini',
+        model: str = '',
         progress_cb: Optional[Callable[[int, int, str], None]] = None,
+        error_cb: Optional[Callable[[str], None]] = None,
         stop_check: Optional[Callable[[], bool]] = None
-    ):
+    ) -> Dict[str, int]:
         """
         全自動翻譯流程：抽取 -> 快取查找 -> 翻譯缺失項 -> 批次儲存快取 -> 寫回 JSON 遊戲檔案
         """
@@ -713,6 +714,8 @@ class RPGProjectManager:
 
         total_needed = len(needed_trans)
         translated_count = 0
+        success_count = 0
+        failed_count = 0
 
         # 2. 進行翻譯
         if total_needed > 0:
@@ -727,13 +730,15 @@ class RPGProjectManager:
                         res = self.engine.translate_claude(
                             text, api_key=api_key,
                             base_url=base_url if base_url else "https://api.anthropic.com/v1",
-                            model=model if model else "claude-3-5-haiku-20241022",
+                            model=model if model else "claude-3-7-sonnet-20250219",
                             src="日文" if src_lang == 'ja' else src_lang,
                             tgt="繁體中文" if tgt_lang == 'zh-TW' else tgt_lang
                         )
                     elif engine_type == 'openai':
                         res = self.engine.translate_openai(
-                            text, api_key=api_key, base_url=base_url, model=model,
+                            text, api_key=api_key,
+                            base_url=base_url if base_url else "https://api.openai.com/v1",
+                            model=model if model else "gpt-4o-mini",
                             src="日文" if src_lang == 'ja' else src_lang,
                             tgt="繁體中文" if tgt_lang == 'zh-TW' else tgt_lang
                         )
@@ -741,14 +746,18 @@ class RPGProjectManager:
                         res = self.engine.translate_google(text, src=src_lang, tgt=tgt_lang)
 
                     self.engine.cache[text] = res
+                    success_count += 1
                     time.sleep(0.08)  # 防限速微小延遲
                 except Exception as e:
-                    print(f"翻譯失敗: {text[:20]}... 錯誤: {e}")
-                    # 翻譯失敗時不寫入快取，讓下次重試時能重新翻譯
+                    failed_count += 1
+                    err_msg = f"翻譯失敗: {text[:20]}... 錯誤: {e}"
+                    print(err_msg)
+                    if error_cb:
+                        error_cb(err_msg)
 
                 translated_count += 1
                 if progress_cb:
-                    progress_cb(translated_count, total_needed, f"翻譯進度 ({translated_count}/{total_needed}): {text[:15]}...")
+                    progress_cb(translated_count, total_needed, f"翻譯進度 ({translated_count}/{total_needed}) [成功:{success_count} 失敗:{failed_count}]: {text[:15]}...")
 
                 # 每 30 句儲存一次快取
                 if translated_count % 30 == 0:
@@ -760,3 +769,9 @@ class RPGProjectManager:
         if progress_cb:
             progress_cb(total_needed, total_needed, "正在將翻譯結果安全寫回遊戲 JSON 檔案...")
         self.apply_translations(self.engine.cache, progress_cb=lambda cur, tot, msg: progress_cb(cur, tot, msg) if progress_cb else None)
+
+        return {
+            "total": total_needed,
+            "success": success_count,
+            "failed": failed_count
+        }

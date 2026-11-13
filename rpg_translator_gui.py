@@ -104,14 +104,21 @@ class RPGTranslatorApp:
         ttk.Entry(llm_row2, textvariable=self.base_url_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 20))
 
         ttk.Label(llm_row2, text="Model:").pack(side=tk.LEFT)
-        self.model_var = tk.StringVar(value="claude-3-5-haiku-20241022")
+        self.model_var = tk.StringVar(value="claude-3-7-sonnet-20250219")
         self.model_combo = ttk.Combobox(
             llm_row2,
             textvariable=self.model_var,
-            values=["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
-            width=26
+            values=[
+                "claude-3-7-sonnet-20250219",
+                "claude-3-5-sonnet-latest",
+                "claude-3-5-haiku-latest",
+                "claude-3-5-sonnet-20241022",
+                "claude-3-5-haiku-20241022"
+            ],
+            width=28
         )
-        self.model_combo.pack(side=tk.LEFT, padx=(4, 0))
+        self.model_combo.pack(side=tk.LEFT, padx=(4, 6))
+        ttk.Label(llm_row2, text="(可下拉或直接輸入自訂模型)", font=("Microsoft JhengHei UI", 8), foreground="#666666").pack(side=tk.LEFT)
 
         # 功能按鈕卡片
         btn_frame = ttk.Frame(self.root, padding=12)
@@ -183,13 +190,25 @@ class RPGTranslatorApp:
             self.llm_frame.pack(fill=tk.X, pady=(6, 2))
             self.api_key_label.config(text="Claude API Key:")
             self.base_url_var.set("https://api.anthropic.com/v1")
-            self.model_combo.config(values=["claude-3-5-haiku-20241022", "claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"])
-            self.model_var.set("claude-3-5-haiku-20241022")
+            self.model_combo.config(values=[
+                "claude-3-7-sonnet-20250219",
+                "claude-3-5-sonnet-latest",
+                "claude-3-5-haiku-latest",
+                "claude-3-5-sonnet-20241022",
+                "claude-3-5-haiku-20241022"
+            ])
+            self.model_var.set("claude-3-7-sonnet-20250219")
         elif engine == "openai":
             self.llm_frame.pack(fill=tk.X, pady=(6, 2))
             self.api_key_label.config(text="API Key:")
             self.base_url_var.set("https://api.openai.com/v1")
-            self.model_combo.config(values=["gpt-4o-mini", "gpt-4o", "deepseek-chat", "gemini-2.0-flash"])
+            self.model_combo.config(values=[
+                "gpt-4o-mini",
+                "gpt-4o",
+                "deepseek-chat",
+                "gemini-2.5-flash",
+                "claude-3-7-sonnet"
+            ])
             self.model_var.set("gpt-4o-mini")
         else:
             self.llm_frame.pack_forget()
@@ -282,7 +301,10 @@ class RPGTranslatorApp:
                 def progress(current, total, msg):
                     self.root.after(0, lambda: self._update_progress(current, total, msg))
 
-                self.project_mgr.auto_translate(
+                def on_error(err_msg):
+                    self.root.after(0, lambda: self._log(f"[警告] {err_msg}"))
+
+                result = self.project_mgr.auto_translate(
                     engine_type=engine,
                     src_lang=src,
                     tgt_lang=tgt,
@@ -290,6 +312,7 @@ class RPGTranslatorApp:
                     base_url=base_url,
                     model=model,
                     progress_cb=progress,
+                    error_cb=on_error,
                     stop_check=lambda: self.stop_requested
                 )
 
@@ -297,8 +320,19 @@ class RPGTranslatorApp:
                     self._log("[已終止] 翻譯已手動停止。已翻譯的項目已妥善儲存至快取中。")
                     self.root.after(0, lambda: messagebox.showinfo("已停止", "翻譯已停止，下次啟動時會從中斷處繼續！"))
                 else:
-                    self._log("[完成] 🎉 恭喜！所有 RPG Maker 文本翻譯並回填完畢！")
-                    self.root.after(0, lambda: messagebox.showinfo("成功", "遊戲翻譯完成！可以啟動遊戲測試囉！"))
+                    succ = result.get('success', 0)
+                    fail = result.get('failed', 0)
+                    if fail > 0:
+                        self._log(f"[完成但有部分失敗] 成功: {succ} 句，失敗: {fail} 句。")
+                        self.root.after(0, lambda: messagebox.showwarning(
+                            "翻譯完成 (部分失敗)",
+                            f"遊戲資料已成功回填！\n\n• 成功翻譯: {succ} 句\n• 翻譯失敗: {fail} 句\n\n"
+                            "失敗項目通常由網路暫時波動或 API 請求頻率限制引起（未寫入快取）。\n"
+                            "您可以隨時再次點擊「一鍵自動翻譯遊戲」重新嘗試未翻完的項目！"
+                        ))
+                    else:
+                        self._log(f"[完成] 🎉 恭喜！共 {succ} 句文本已全數翻譯並回填完畢！")
+                        self.root.after(0, lambda: messagebox.showinfo("成功", f"遊戲翻譯完成！\n共成功翻譯 {succ} 句文本，可以啟動遊戲測試囉！"))
 
             except Exception as e:
                 self._log(f"[錯誤] 發生異常: {e}")

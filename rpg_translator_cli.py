@@ -79,7 +79,7 @@ def main():
             if not base_url:
                 base_url = "https://api.anthropic.com/v1"
             if not model:
-                model = "claude-3-5-haiku-20241022"
+                model = "claude-3-7-sonnet-20250219"
         elif args.engine == "openai":
             if not base_url:
                 base_url = "https://api.openai.com/v1"
@@ -91,7 +91,7 @@ def main():
             pct = int((c / t) * 100) if t > 0 else 0
             print(f"\r[{pct}%] {msg}", end="", flush=True)
 
-        manager.auto_translate(
+        res = manager.auto_translate(
             engine_type=args.engine,
             src_lang=args.src,
             tgt_lang=args.tgt,
@@ -100,7 +100,9 @@ def main():
             model=model,
             progress_cb=progress
         )
-        print("\n\n翻譯完成！遊戲 JSON 已更新。")
+        succ = res.get('success', 0)
+        fail = res.get('failed', 0)
+        print(f"\n\n翻譯完成！遊戲 JSON 已更新。(成功: {succ} 句, 失敗: {fail} 句)")
 
 if __name__ == "__main__":
     main()
